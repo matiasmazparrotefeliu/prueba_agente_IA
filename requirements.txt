@@ -1,0 +1,9 @@
+langchain
+langchain-openai
+langchain-community
+langgraph
+ddgs
+python-dotenv
+pydantic
+openai
+langgraph-checkpoint-sqlite

@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  agente-ia:
+    build: .
+    container_name: mi_agente_ia
+    environment:
+      - API_URL=https://openrouter.ai/api/v1
+      - API_KEY=${API_KEY}
+      - AI_MODEL=nvidia/nemotron-3-super-120b-a12b:free
+    stdin_open: true  # Equivalente a -i (interactivo)
+    tty: true         # Equivalente a -t (asigna una terminal virtual)
