@@ -1,14 +1,51 @@
+import sys
+import time
+import threading
+from uuid import uuid4
+
+from langgraph.errors import GraphRecursionError
+
 from agent import graph
+from config import AI_MODEL
+
+MAX_STEPS = 25
+
+class Spinner:
+    def __init__(self, message="Procesando"):
+        self.message = message
+        self.running = False
+        self.thread = None
+        self.frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._spin)
+        self.thread.daemon = True
+        self.thread.start()
+    
+    def _spin(self):
+        i = 0
+        while self.running:
+            sys.stdout.write(f"\rAI: {self.frames[i]} {self.message}...")
+            sys.stdout.flush()
+            time.sleep(0.08)
+            i = (i + 1) % len(self.frames)
+    
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=0.5)
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
 
 def main():
     print("==================================================")
     print("🤖 ¡Asistente de Investigación IA Iniciado!")
-    print(f"Modelo en uso: {graph}")
-    print("Escribe 'salir' o 'exit' para terminar la conversación.")
+    print(f"Modelo en uso: {AI_MODEL}")
+    print("Comandos: /nuevo (reiniciar sesión), salir/exit/quit")
     print("==================================================\n")
 
-    # Definimos un identificador único para esta sesión de chat
-    config = {"configurable": {"thread_id": "sesion_usuario_1"}}
+    thread_id = str(uuid4())
 
     while True:
         try:
@@ -16,21 +53,40 @@ def main():
             if user_input.lower() in ["salir", "exit", "quit"]:
                 print("¡Adiós!")
                 break
-            
+
+            if user_input.lower() == "/nuevo":
+                thread_id = str(uuid4())
+                print("🧹 Sesión nueva iniciada. Memoria limpia.")
+                continue
+
             if not user_input.strip():
                 continue
 
-            # Estructurar la entrada para LangGraph
-            inputs = {"messages": [("user", user_input)]}
+            inputs = {"messages": [("user", user_input)], "tool_iterations": 0}
 
-            print("\nAI: Pensando y buscando información si es necesario...")
-            
-            # Ejecutamos el grafo pasándole tanto las entradas como la configuración con el thread_id
-            response = graph.invoke(inputs, config=config)
+            spinner = Spinner("Consultando")
+            spinner.start()
+            try:
+                response = graph.invoke(
+                    inputs,
+                    {
+                        "configurable": {"thread_id": thread_id},
+                        "recursion_limit": MAX_STEPS,
+                    },
+                )
+            finally:
+                spinner.stop()
 
-            # Obtener el último mensaje generado por el agente
             latest_message = response["messages"][-1]
-            print(f"\nAI: {latest_message.content}")
+            if latest_message.content:
+                print(f"\nAI: {latest_message.content}")
+            else:
+                print("\nAI: ⚠️ Respuesta vacía del modelo. "
+                      "Prueba de nuevo o usa /nuevo.")
+
+        except GraphRecursionError:
+            print("\n🛑 El agente entró en bucle y frené por seguridad.")
+            print("   Usa /nuevo para reiniciar la sesión y prueba otra pregunta.")
 
         except Exception as e:
             print(f"\n❌ Ocurrió un error: {e}")
